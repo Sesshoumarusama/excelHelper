@@ -34,8 +34,8 @@ public class ReadTestCase {
     @Test
     public void test2() throws IOException, IllegalAccessException, InstantiationException {
         InputStream is = new FileInputStream("E:\\file\\students.xlsx");//模拟一个输入流，该输入流可以来源于网络，例如使用SpringMVC上传的文件
-        Reader excelReader = ExcelReader.ReaderBuilder.newBuilder().setReadModel(ReadModel.TopToBottom).setSource(is, FileType.XLSX).build();
-        List<Student> read = excelReader.read(Student.class);
+        Reader excelReader = ExcelReader.ReaderBuilder.newBuilder().setReadModel(ReadModel.TopToBottom).setFileType(FileType.XLSX).build();
+        List<Student> read = excelReader.read(is, Student.class);
         for (Student s : read){
             System.out.println(s);
         }
@@ -43,8 +43,8 @@ public class ReadTestCase {
 
     @Test
     public void test3() throws IOException, IllegalAccessException, InstantiationException {
-        Reader excelReader = ExcelReader.ReaderBuilder.newBuilder().setSource("E:\\file\\students1.xlsx", FileType.XLSX).build();
-        List<Student> read = excelReader.read(Student.class);
+        Reader excelReader = ExcelReader.ReaderBuilder.newBuilder().setFileType(FileType.XLSX).build();
+        List<Student> read = excelReader.read("E:\\file\\students1.xlsx", Student.class);
         for (Student s : read){
             System.out.println(s);
         }

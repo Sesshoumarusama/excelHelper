@@ -22,6 +22,17 @@ public class Student {
     @Cell(columnNum = "E", rowNum = 5)
     private Boolean vaild;
 
+    public Student() {
+    }
+
+    public Student(Integer no, String name, Integer age, Date hiredate, Boolean vaild) {
+        this.no = no;
+        this.name = name;
+        this.age = age;
+        this.hiredate = hiredate;
+        this.vaild = vaild;
+    }
+
     @Override
     public String toString() {
         return "Student{" +

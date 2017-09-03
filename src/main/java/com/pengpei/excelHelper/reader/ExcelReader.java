@@ -19,9 +19,11 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Created by pengpei on 2017/8/29.
  */
-public class ExcelReader<T> extends AbstractReader {
+public final class ExcelReader<T> implements Reader {
     private Workbook workbook;
-    private ReadModel model;
+    private ReadModel readModel;
+    private FileType fileType;
+
 
     /**
      * 当readModel为LeftToRight时，key为行号（从0开始）
@@ -29,8 +31,16 @@ public class ExcelReader<T> extends AbstractReader {
      */
     private Map<Integer, Field> fieldMap = new ConcurrentHashMap<Integer, Field>();
 
-    private ExcelReader(BufferedInputStream bs, FileType fileType) throws IOException {
-        super(bs, fileType);
+    private ExcelReader(FileType fileType) throws IOException {
+        this.fileType = fileType;
+    }
+
+    private ExcelReader(FileType fileType, ReadModel readModel) throws IOException {
+        this(fileType);
+        this.readModel = readModel;
+    }
+
+    private synchronized void createWorkbook(BufferedInputStream bs) throws IOException {
         switch (fileType) {
             case XLS:
                 workbook = new HSSFWorkbook(bs);
@@ -41,20 +51,28 @@ public class ExcelReader<T> extends AbstractReader {
         }
     }
 
-    private ExcelReader(BufferedInputStream bs, FileType fileType, ReadModel model) throws IOException {
-        this(bs, fileType);
-        this.model = model;
+    @Override
+    public List read(InputStream is, Class clazz) throws IOException, InstantiationException, IllegalAccessException {
+        createWorkbook(new BufferedInputStream(is));
+        return read(clazz);
     }
+
+    @Override
+    public List read(String filePath, Class clazz) throws IOException, InstantiationException, IllegalAccessException {
+        createWorkbook(new BufferedInputStream(new FileInputStream(filePath)));
+        return read(clazz);
+    }
+
 
     public List<T> read(Class clazz) throws IOException, InstantiationException, IllegalAccessException {
         List<T> list = null;
         Excel excel = (Excel) clazz.getAnnotation(Excel.class);
-        if(model == null){
-            model = excel.model();
+        if (readModel == null) {
+            readModel = excel.model();
         }
-        initColumnFieldMap(clazz, model);
+        fieldMap.putAll(initColumnFieldMap(clazz, readModel));
         try {
-            switch (model) {
+            switch (readModel) {
                 case TopToBottom:
                     list = readFromTopToBottom(excel, clazz);
                     break;
@@ -66,8 +84,6 @@ public class ExcelReader<T> extends AbstractReader {
         } finally {
             if (workbook != null)
                 workbook.close();
-            if (bs != null)
-                bs.close();
         }
     }
 
@@ -92,7 +108,7 @@ public class ExcelReader<T> extends AbstractReader {
                     if (!fieldMap.containsKey(i))
                         continue;
                     cell = row.getCell(i);
-                    if(cell == null || CellUtils.isBlank(cell))
+                    if (cell == null || CellUtils.isBlank(cell))
                         continue;
                     field = fieldMap.get(i);
                     cellValue = CellUtils.parseCellValue(field, cell);
@@ -136,7 +152,8 @@ public class ExcelReader<T> extends AbstractReader {
     }
 
 
-    private void initColumnFieldMap(Class clazz, ReadModel readModel) {
+    public static Map<Integer, Field> initColumnFieldMap(Class clazz, ReadModel readModel) {
+        Map<Integer, Field> map = new ConcurrentHashMap<>();
         Field[] declaredFields = clazz.getDeclaredFields();
         Field field;
         for (int i = 0; i < declaredFields.length; i++) {
@@ -156,17 +173,21 @@ public class ExcelReader<T> extends AbstractReader {
                 default:
                     throw new IllegalArgumentException("无效的读取模式！");
             }
-            if (fieldMap.containsKey(n))
+            if (map.containsKey(n))
                 throw new IllegalArgumentException("不能为字段指定重复的列编号");
             field.setAccessible(true);
-            fieldMap.put(n, field);
+            map.put(n, field);
         }
+        return map;
     }
 
+
+    /**
+     * 用于设置Reader的读取行为和构建Reader组件，该行为拥有最高优先级，会覆盖@Excel总定义的读取行为
+     */
     public static class ReaderBuilder {
-        private BufferedInputStream is;
         private FileType fileType;
-        private ReadModel model;
+        private ReadModel readModel;
 
         private ReaderBuilder() {
         }
@@ -176,41 +197,30 @@ public class ExcelReader<T> extends AbstractReader {
             return builder;
         }
 
-        public ReaderBuilder setSource(InputStream is, FileType fileType) {
-            if (this.is != null)
-                throw new IllegalArgumentException("已经设置了数据文件源！");
-            if (this.fileType != null)
-                throw new IllegalArgumentException("已经设置了文件类型!");
-            this.is = new BufferedInputStream(is);
+        public ReaderBuilder setFileType(FileType fileType) {
             this.fileType = fileType;
             return this;
         }
 
-        public ReaderBuilder setSource(String filePath, FileType fileType) throws FileNotFoundException {
-            InputStream is = new FileInputStream(filePath);
-            return this.setSource(is, fileType);
-        }
-
         /**
-         * 该该做会使@Excel中设置的ReadModel无效
-         * @param model
+         * 该操作会使@Excel中设置的ReadModel无效
+         *
+         * @param readModel
          * @return
          */
-        public ReaderBuilder setReadModel(ReadModel model){
-            this.model = model;
+        public ReaderBuilder setReadModel(ReadModel readModel) {
+            this.readModel = readModel;
             return this;
         }
 
         public Reader build() throws IOException {
-            if (is == null)
-                throw new IllegalArgumentException("找不到读取的数据源！");
             if (fileType == null)
                 throw new IllegalArgumentException("无法识别文件类型");
             Reader reader;
-            if(model == null){
-                reader = new ExcelReader(this.is, this.fileType);
-            }else {
-                reader = new ExcelReader(this.is, this.fileType, this.model);
+            if (readModel == null) {
+                reader = new ExcelReader(this.fileType);
+            } else {
+                reader = new ExcelReader(this.fileType, this.readModel);
             }
             return reader;
         }

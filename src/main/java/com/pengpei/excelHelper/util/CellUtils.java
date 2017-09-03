@@ -4,6 +4,7 @@ import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 
 import java.lang.reflect.Field;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 
 /**
@@ -156,6 +157,33 @@ public class CellUtils {
                 throw new IllegalArgumentException("暂不支持的数据类型");
         }
         return cellValue;
+    }
+
+    public static void setCellValue(Field field, Cell cell, Object obj) throws IllegalAccessException {
+        switch (field.getGenericType().getTypeName()) {
+            case "java.lang.String":
+                cell.setCellValue((String) field.get(obj));
+                break;
+            case "java.lang.Integer":
+            case "java.lang.Short":
+            case "int":
+            case "short":
+            case "java.lang.Double":
+            case "double":
+                cell.setCellValue(Double.parseDouble(field.get(obj).toString()));
+                break;
+            case "java.util.Date":
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd");
+                String format = sdf.format((Date) field.get(obj));
+                cell.setCellValue(format);
+                break;
+            case "java.lang.Boolean":
+            case "boolean":
+                cell.setCellValue((Boolean) field.get(obj));
+                break;
+            default:
+                throw new IllegalArgumentException("暂不支持的数据类型");
+        }
     }
 
     public static boolean isBlank(Cell cell) {
